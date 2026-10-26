@@ -199,16 +199,18 @@ var SIM=function(seed,hooks){
   }
   while(S.gen<P.y+26)genRow(S.gen+1);
   function wrap(row,o){if(o.x>=-M+row.L)o.x-=row.L;else if(o.x<-M)o.x+=row.L}
-  function logAt(row,x){for(var k=0;k<row.o.length;k++){var o=row.o[k];if(x>o.x-.1&&x<o.x+o.len+.1)return o}return null}
+  // rondin sous le joueur : on est indulgent sur les bords (comme dans le vrai jeu)
+  function logAt(row,x){for(var k=0;k<row.o.length;k++){var o=row.o[k];if(x>o.x-.3&&x<o.x+o.len+.3)return o}return null}
   function die(cause){if(S.over)return;S.over=true;S.cause=cause;emit('die',cause)}
   // 1 avancer · 2 reculer · 3 gauche · 4 droite
   function tryHop(c){
     var row=S.rows[P.y],tx=P.x,ty=P.y;
     if(c===1)ty++;else if(c===2)ty--;else if(c===3)tx--;else if(c===4)tx++;else return;
     P.dir=c;
-    if(c<=2||!(row&&row.t==='w'))tx=Math.round(tx);
     if(ty<S.score-5||ty<0){emit('bump');return}
     var tr=S.rows[ty];
+    // sur l'eau on garde sa position exacte (pas de saut en biais) ; sur la terre ferme on se recale sur la case
+    if(!(row&&row.t==='w'&&tr.t==='w'))tx=Math.round(tx);
     if(tx<-.35||tx>C-.65){emit('bump');return}
     if(tr.t==='g'&&tr.trees[Math.round(tx)]){emit('bump');return}
     P.fromx=P.fx;P.fromy=P.y;P.x=tx;P.y=ty;P.hop=HOP;P.onLog=false;emit('hop',c);
@@ -230,15 +232,16 @@ var SIM=function(seed,hooks){
     row=S.rows[P.y];
     if(P.hop>0){P.hop--;var k2=P.hop/HOP;P.fx=P.x+(P.fromx-P.x)*k2;
       if(P.hop===0){
-        if(row.t==='w'){if(logAt(row,P.x)){P.onLog=true;emit('log')}else{P.fx=P.x;die('eau')}}
+        if(row.t==='w'){var lg=logAt(row,P.x);if(lg){P.x=Math.max(lg.x+.35,Math.min(lg.x+lg.len-.35,P.x));P.fx=P.x;P.onLog=true;emit('log')}else{P.fx=P.x;die('eau')}}
         else{P.x=Math.round(P.x);P.fx=P.x;emit('land')}
         if(!S.over&&S.buf){var b=S.buf;S.buf=0;tryHop(b)}
       }}
     else if(row.t==='w'&&P.onLog){P.x+=row.sp*row.dir;P.fx=P.x;if(P.x<-.6||P.x>C-.4)die('emporte')}
     // collisions
-    if(!S.over){row=S.rows[P.y];
-      if(row.t==='r'){for(k=0;k<row.o.length;k++){o=row.o[k];if(P.fx+.32>o.x&&P.fx-.32<o.x+o.len){die('voiture');break}}}
-      else if(row.t==='t'&&row.train&&P.fx+.4>row.train.x&&P.fx-.4<row.train.x+TRAIN)die('train');}
+    // collisions : pendant la 1re moitié du saut on est encore sur la rangée de départ, ensuite sur celle d'arrivée
+    if(!S.over){var cr=P.hop>HOP/2?P.fromy:P.y;row=S.rows[cr];
+      if(row&&row.t==='r'){for(k=0;k<row.o.length;k++){o=row.o[k];if(P.fx+.27>o.x+.06&&P.fx-.27<o.x+o.len-.06){die('voiture');break}}}
+      else if(row&&row.t==='t'&&row.train&&P.fx+.3>row.train.x&&P.fx-.3<row.train.x+TRAIN)die('train');}
     // le coach arrive si on traîne
     var sp=.0045+Math.min(.0095,S.score*.00005);S.cam=Math.max(S.cam+sp,P.y-6);
     if(!S.over&&P.y<S.cam&&P.hop===0)die('coach');
