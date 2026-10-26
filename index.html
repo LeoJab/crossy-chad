@@ -183,6 +183,8 @@ var SIM=function(seed,hooks){
       x+=len+(kind==='r'?2.4+rnd()*3.2:1.1+rnd()*1.5)}
     L=x+M;row.L=L;row.o=list;
   }
+  // vitesse du prochain train : marchandises lent, train normal ou TGV très rapide (plus rapide en avançant)
+  function trainSpeed(i){var d=Math.min(1,i/160),r=rnd();return Math.min(1,(r<.35?.3+rnd()*.12:r<.75?.5+rnd()*.15:.75+rnd()*.15)*(1+d*.25))}
   function genRow(i){
     var d=Math.min(1,i/160),row={i:i};
     if(S.zoneLeft<=0){
@@ -194,7 +196,7 @@ var SIM=function(seed,hooks){
     if(row.t==='g'){row.trees={};if(i>0){var n=Math.floor(rnd()*(2+d*2.5));for(var k=0;k<n;k++){var c=Math.floor(rnd()*C);if(i<3&&c===4)continue;row.trees[c]=1}}}
     else if(row.t==='r'){row.dir=rnd()<.5?-1:1;row.sp=(.03+rnd()*.03)*(1+d*.9);cars(row,'r')}
     else if(row.t==='w'){row.dir=-S.lastRiverDir;S.lastRiverDir=row.dir;row.sp=(.018+rnd()*.022)*(1+d*.6);cars(row,'w')}
-    else{row.dir=rnd()<.5?-1:1;row.timer=90+Math.floor(rnd()*220);row.train=null;row.warn=false}
+    else{row.dir=rnd()<.5?-1:1;row.timer=110+Math.floor(rnd()*220);row.train=null;row.warn=false;row.tsp=trainSpeed(i)}
     S.rows[i]=row;S.gen=i;
   }
   while(S.gen<P.y+26)genRow(S.gen+1);
@@ -224,9 +226,9 @@ var SIM=function(seed,hooks){
     for(i=Math.floor(S.cam)-3;i<=S.gen;i++){row=S.rows[i];if(!row)continue;
       if(row.t==='r'||row.t==='w'){for(k=0;k<row.o.length;k++){o=row.o[k];o.x+=row.sp*row.dir;wrap(row,o)}}
       else if(row.t==='t'){
-        if(row.train){row.train.x+=.62*row.dir;if(row.dir>0?row.train.x>C+M+2:row.train.x+TRAIN<-M-2){row.train=null;row.warn=false;row.timer=200+Math.floor(rnd()*260)}}
-        else if(--row.timer<=0){row.train={x:row.dir>0?-M-TRAIN:C+M};emit('train',i)}
-        else if(row.timer===70){row.warn=true;emit('warn',i)}
+        if(row.train){row.train.x+=row.train.sp*row.dir;if(row.dir>0?row.train.x>C+M+2:row.train.x+TRAIN<-M-2){row.train=null;row.warn=false;row.tsp=trainSpeed(i);row.timer=200+Math.floor(rnd()*260)}}
+        else if(--row.timer<=0){row.train={x:row.dir>0?-M-TRAIN:C+M,sp:row.tsp};emit('train',i)}
+        else if(row.timer===85){row.warn=true;emit('warn',i)}
       }}
     // saut en cours
     row=S.rows[P.y];
@@ -268,8 +270,8 @@ function onEv(n,v){const P=S.P;
   else if(n==='step'){CG.setScore(v,true);CG.target(v);if(v%50===0){CG.popup(v+' bonds 🔥');CG.sfx.big()}}
   else if(n==='log')CG.sfx.tone(300,0,.06,{type:'sine',v:.3});
   else if(n==='land')V.squash=.6;
-  else if(n==='warn'){if(Math.abs(v-P.y)<8)CG.sfx.tone(880,0,.12,{type:'square',v:.15})}
-  else if(n==='train'){if(Math.abs(v-P.y)<8){CG.sfx.noise(0,.6,.6,500)}}
+  else if(n==='warn'){if(Math.abs(v-P.y)<7){CG.sfx.tone(392,0,.35,{type:'sawtooth',v:.22});CG.sfx.tone(330,.38,.45,{type:'sawtooth',v:.22})}} // klaxon
+  else if(n==='train'){if(Math.abs(v-P.y)<7){const sp=S.rows[v]&&S.rows[v].train?S.rows[v].train.sp:.6;CG.sfx.noise(0,.5+sp,.7,350+sp*600);CG.sfx.tone(220+sp*200,0,.6,{type:'sawtooth',v:.2,to:120})}}
   else if(n==='die'){V.shake=v==='coach'?6:12;const sx=X(P.fx+.5),sy=Y(P.y);
     if(v==='eau'){CG.sfx.noise(0,.4,.8,1400);for(let i=0;i<18;i++)V.parts.push({x:sx,y:sy,vx:(Math.random()-.5)*6,vy:-2-Math.random()*5,l:34,c:i%2?'#fff':'#9be3ff',g:.3});CG.popup('PLOUF ! 💦')}
     else if(v==='voiture'){CG.sfx.hit();CG.flash();puff(sx,sy,'#ffd426',16,7);CG.popup('ÉCRASÉ 🥞')}
@@ -288,6 +290,8 @@ addEventListener('pointercancel',()=>{pid=null});
 // ---------- boucle ----------
 function step(){V.t++;
   if(CG.state==='play'){CG.tick();if(S.over&&S.dying===50&&!V.sent){V.sent=true;CG.over(S.score,'bonds')}}
+  // sonnerie du passage à niveau tant qu'un train approche près du joueur
+  if(CG.state==='play'&&!S.over&&V.t%18===0)for(let r=S.P.y-3;r<=S.P.y+5;r++){const row=S.rows[r];if(row&&row.t==='t'&&row.warn&&!row.train){CG.sfx.tone(1250,0,.09,{type:'triangle',v:.25});break}}
   const want=Math.max(S.P.y,S.cam+(H-baseY)/cs-.4);view+=(want-view)*.12;
   if(V.squash>0)V.squash-=.08;if(V.shake>0)V.shake*=.88;
   for(const p of V.parts){p.x+=p.vx;p.y+=p.vy;p.vy+=p.g||0;p.l--}V.parts=V.parts.filter(p=>p.l>0);
@@ -308,8 +312,19 @@ function drawGround(r,row,cy){const y0=cy-cs/2;
   else if(row.t==='w'){ctx.fillStyle='#3fa9f5';ctx.fillRect(0,y0,W,cs+1);ctx.fillStyle='#ffffff40';for(let k=0;k<6;k++){const x=((hash(r,k)*W+V.t*row.sp*row.dir*cs)%W+W)%W;ctx.fillRect(x,y0+cs*(.2+.12*k),cs*.6,3)}}
   else{ctx.fillStyle='#8a7d6e';ctx.fillRect(0,y0,W,cs+1);ctx.fillStyle='#5b4a3a';for(let x=(offX%(cs*.5))-cs;x<W;x+=cs*.5)ctx.fillRect(x,y0+cs*.18,cs*.2,cs*.64);
     ctx.fillStyle='#c9cbe0';ctx.fillRect(0,y0+cs*.3,W,4);ctx.fillRect(0,y0+cs*.66,W,4);
-    // feu de signalisation
-    const lx=X(9)+cs*.3;ctx.fillStyle='#12102b';ctx.fillRect(lx,y0-cs*.5,5,cs*.9);ctx.beginPath();ctx.arc(lx+2.5,y0-cs*.5,cs*.16,0,7);ctx.fillStyle=row.warn&&V.t%20<10?'#ff3b3b':'#5a1a1a';ctx.fill();ctx.strokeStyle='#12102b';ctx.lineWidth=2;ctx.stroke()}
+    // passage à niveau : la voie clignote en rouge, feux visibles des deux côtés, flèches qui défilent dans le sens du train
+    const on=row.warn||row.train,fast=on&&row.tsp>.7,per=fast?8:14,blink=V.t%(per*2)<per;
+    if(on){ctx.fillStyle=blink?'#ff2a2a99':'#ff2a2a40';ctx.fillRect(0,y0,W,cs)}
+    if(row.warn&&!row.train||(row.train&&(row.dir>0?row.train.x<0:row.train.x+13>9))){const dir=row.dir,step=cs*1.3,ph=(V.t*(fast?5:3)*dir)%step;
+      ctx.font=`900 ${cs*.62}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=5;ctx.strokeStyle='#12102b';ctx.fillStyle='#ffd426';
+      for(let x=-step+ph;x<W+step;x+=step){ctx.strokeText(dir>0?'»':'«',x,y0+cs*.5);ctx.fillText(dir>0?'»':'«',x,y0+cs*.5)}
+      const lbl=fast?'⚠️ TGV !!':'⚠️ TRAIN',fs=cs*.36;ctx.font=`900 ${fs}px system-ui`;const tw=ctx.measureText(lbl).width+fs;ctx.fillStyle='#12102bdd';ctx.beginPath();ctx.roundRect?ctx.roundRect(W/2-tw/2,y0+cs*.5-fs*.75,tw,fs*1.5,fs*.75):ctx.rect(W/2-tw/2,y0+cs*.5-fs*.75,tw,fs*1.5);ctx.fill();
+      ctx.fillStyle=fast?'#ff4f6d':'#fff';ctx.fillText(lbl,W/2,y0+cs*.52);ctx.textBaseline='alphabetic'}}
+}
+function drawSignals(row,y0){const on=row.warn||row.train,fast=on&&row.tsp>.7,per=fast?8:14,blink=V.t%(per*2)<per;
+    for(const side of [-1,1]){const lx=side<0?Math.max(4,X(0)-cs*.42):Math.min(W-cs*.45,X(9)+cs*.3);ctx.fillStyle='#12102b';ctx.fillRect(lx,y0-cs*.55,5,cs*.95);
+      ctx.fillStyle='#fff';ctx.save();ctx.translate(lx+2.5,y0-cs*.62);ctx.rotate(.6);ctx.fillRect(-cs*.28,-3,cs*.56,6);ctx.rotate(-1.2);ctx.fillRect(-cs*.28,-3,cs*.56,6);ctx.restore();
+      for(const k of [-1,1]){ctx.beginPath();ctx.arc(lx+2.5+k*cs*.15,y0-cs*.28,cs*.12,0,7);const lit=on&&(k<0?blink:!blink);ctx.fillStyle=lit?'#ff3b3b':'#4a1616';if(lit){ctx.shadowColor='#ff3b3b';ctx.shadowBlur=16}ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle='#12102b';ctx.lineWidth=2;ctx.stroke()}}
 }
 function drawTree(cx,cy,big){const x=X(cx);ctx.fillStyle='#7a5530';ctx.strokeStyle='#12102b66';ctx.lineWidth=1.5;ctx.fillRect(x+cs*.4,cy-cs*.12,cs*.2,cs*.34);ctx.strokeRect(x+cs*.4,cy-cs*.12,cs*.2,cs*.34);
   const top=block(x+cs*.1,x+cs*.9,cy-cs*.2,cs*(big?.44:.32),'#2fae5a',cs*.16);ctx.fillStyle='#4fd27a';ctx.fillRect(x+cs*.2,top+cs*.08,cs*.3,cs*.18)}
@@ -322,7 +337,11 @@ function drawRowObjects(r,row,cy){
     if(truck){const cab=row.dir>0?[x1-cs*.6,x1]:[x0,x0+cs*.6];block(cab[0],cab[1],cy,cs*.42,col,cs*.12)}
     else{const w0=x0+(x1-x0)*.25,w1=x1-(x1-x0)*.25;ctx.fillStyle='#bfe9ff';ctx.fillRect(w0,top+cs*.1,w1-w0,cs*.42);ctx.fillStyle=col;ctx.fillRect(w0+(w1-w0)*.42,top+cs*.1,(w1-w0)*.16,cs*.42)}
     ctx.fillStyle='#fff6c2';ctx.fillRect(row.dir>0?x1-5:x0+1,top+cs*.08,4,cs*.12);ctx.fillRect(row.dir>0?x1-5:x0+1,top+cs*.48,4,cs*.12)}}
-  else if(row.t==='t'&&row.train){const tr=row.train;for(let k=0;k<3;k++){const a=tr.x+k*4.4,b=a+4.2;const x0=X(a),x1=X(b);const top=block(x0,x1,cy,cs*.6,k===(row.dir>0?2:0)?'#ff4f6d':'#ffd426',cs*.06);ctx.fillStyle='#12102b';for(let w=x0+cs*.3;w<x1-cs*.4;w+=cs*.7)ctx.fillRect(w,top+cs*.18,cs*.4,cs*.3)}}
+  if(row.t==='t')drawSignals(row,cy-cs/2);
+  else if(row.t==='t'&&row.train){const tr=row.train,fast=tr.sp>.7,slow=tr.sp<.45,head=row.dir>0?2:0;
+    // phare du train qui arrive (lueur au bord de l'écran)
+    const hx=row.dir>0?X(tr.x+13):X(tr.x);ctx.fillStyle='#fff6c255';ctx.beginPath();ctx.ellipse(hx+row.dir*cs*.6,cy-cs*.2,cs*1.2,cs*.4,0,0,7);ctx.fill();
+    for(let k=0;k<3;k++){const a=tr.x+k*4.4,b=a+4.2;const x0=X(a),x1=X(b);const col=fast?(k===head?'#2433f2':'#f4f6ff'):slow?(k===head?'#2fae5a':'#9b6a3c'):(k===head?'#ff4f6d':'#ffd426');const top=block(x0,x1,cy,cs*(fast?.5:.6),col,cs*.06);ctx.fillStyle='#12102b';for(let w=x0+cs*.3;w<x1-cs*.4;w+=cs*.7)ctx.fillRect(w,top+cs*.18,cs*.4,cs*.3)}}
 }
 function drawChad(){const P=S.P,r=P.y;let cy=Y(P.fromy+(P.y-P.fromy)*(1-P.hop/S.HOP));
   const k=P.hop>0?1-P.hop/S.HOP:0,jump=P.hop>0?Math.sin(k*Math.PI)*cs*.35:0;const x=X(P.fx+.5);
