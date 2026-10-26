@@ -338,7 +338,7 @@ function drawRowObjects(r,row,cy){
     else{const w0=x0+(x1-x0)*.25,w1=x1-(x1-x0)*.25;ctx.fillStyle='#bfe9ff';ctx.fillRect(w0,top+cs*.1,w1-w0,cs*.42);ctx.fillStyle=col;ctx.fillRect(w0+(w1-w0)*.42,top+cs*.1,(w1-w0)*.16,cs*.42)}
     ctx.fillStyle='#fff6c2';ctx.fillRect(row.dir>0?x1-5:x0+1,top+cs*.08,4,cs*.12);ctx.fillRect(row.dir>0?x1-5:x0+1,top+cs*.48,4,cs*.12)}}
   if(row.t==='t')drawSignals(row,cy-cs/2);
-  else if(row.t==='t'&&row.train){const tr=row.train,fast=tr.sp>.7,slow=tr.sp<.45,head=row.dir>0?2:0;
+  if(row.t==='t'&&row.train){const tr=row.train,fast=tr.sp>.7,slow=tr.sp<.45,head=row.dir>0?2:0;
     // phare du train qui arrive (lueur au bord de l'écran)
     const hx=row.dir>0?X(tr.x+13):X(tr.x);ctx.fillStyle='#fff6c255';ctx.beginPath();ctx.ellipse(hx+row.dir*cs*.6,cy-cs*.2,cs*1.2,cs*.4,0,0,7);ctx.fill();
     for(let k=0;k<3;k++){const a=tr.x+k*4.4,b=a+4.2;const x0=X(a),x1=X(b);const col=fast?(k===head?'#2433f2':'#f4f6ff'):slow?(k===head?'#2fae5a':'#9b6a3c'):(k===head?'#ff4f6d':'#ffd426');const top=block(x0,x1,cy,cs*(fast?.5:.6),col,cs*.06);ctx.fillStyle='#12102b';for(let w=x0+cs*.3;w<x1-cs*.4;w+=cs*.7)ctx.fillRect(w,top+cs*.18,cs*.4,cs*.3)}}
