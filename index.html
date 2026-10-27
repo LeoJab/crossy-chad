@@ -45,7 +45,10 @@ canvas{display:block;touch-action:none}
 @keyframes fl{from{opacity:.85}to{opacity:0}}
 .popup{position:absolute;left:0;right:0;top:28%;text-align:center;font-size:clamp(26px,5vw,40px);font-weight:900;color:var(--sun);-webkit-text-stroke:3px var(--ink);paint-order:stroke fill;text-shadow:0 4px 0 var(--ink);pointer-events:none;animation:popup 1.3s ease-out forwards}
 @keyframes popup{0%{transform:scale(.3);opacity:0}15%{transform:scale(1.15);opacity:1}30%{transform:scale(1)}80%{opacity:1}100%{transform:translateY(-40px);opacity:0}}
+.modes{display:flex;gap:8px;justify-content:center;margin:10px 0 2px;flex-wrap:wrap}.modes .btn{font-size:14px;padding:7px 12px;opacity:.6}.modes .btn.on{background:var(--sun);opacity:1}
 #confetti{position:absolute;inset:0;pointer-events:none;width:100%;height:100%}
+
+#chrono{position:absolute;left:0;right:0;top:calc(max(14px,env(safe-area-inset-top)) + clamp(48px,9vh,86px));text-align:center;font-weight:900;font-size:16px;pointer-events:none}#chrono span{background:#12102bcc;border-radius:99px;padding:4px 14px}
 
 </style>
 </head>
@@ -60,7 +63,8 @@ canvas{display:block;touch-action:none}
   <div class="hint hide" id="hint"><span>Tape pour avancer · glisse ← → ↓ pour tourner</span></div>
   <div class="panel" id="menu">
     <div class="title">CROSSY<br>CHAD</div>
-    <p class="muted">Traverse les routes, les rivières et les voies ferrées sans finir en crêpe. Avance le plus loin possible, et ne traîne pas : le coach arrive !</p>
+    <p class="muted">Traverse les routes, les rivières et les voies ferrées sans finir en crêpe. Mode normal : va le plus loin possible. Contre la montre : le même parcours pour tout le monde, arrive au bond 100 le plus vite possible !</p>
+    <div class="modes hide" id="modes"></div>
     <div class="row"><div class="stat"><b id="mBest">0</b><small>ton record</small></div><div class="stat"><b id="mHub">–</b><small id="mHubWho">record du hub</small></div></div>
     <button class="btn primary" id="play">▶ Jouer</button>
     <p class="muted" style="margin-top:8px;font-size:12px">↑ avancer · ← → aller sur le côté · ↓ reculer · sur téléphone : tape pour avancer, glisse pour tourner</p>
@@ -71,7 +75,7 @@ canvas{display:block;touch-action:none}
     <div class="muted" id="medalTxt"></div>
     <div id="recBox"></div>
     <div class="row"><div class="stat"><b id="oScore">0</b><small id="oLabel">score</small></div><div class="stat"><b id="oBest">0</b><small>ton record</small></div></div>
-    <button class="btn primary" id="again">↻ Rejouer</button>
+    <button class="btn primary" id="again">↻ Rejouer</button> <button class="btn hide" id="toMenu">☰ Modes</button>
     <p class="muted" style="margin-top:8px;font-size:12px">Espace ou Entrée pour rejouer</p>
     <div class="lb" id="oLb"></div>
   </div>
@@ -84,7 +88,8 @@ const $=id=>document.getElementById(id);
 for(const ev of ['touchmove','touchstart'])document.addEventListener(ev,e=>{if(!e.target.closest('.panel,button,#top'))e.preventDefault()},{passive:false});
 document.addEventListener('gesturestart',e=>e.preventDefault());
 const CG=(()=>{
-  const cfg={key:'jeu',unit:'',medals:[[10,'🥉','Médaille de bronze'],[25,'🥈','Médaille d\'argent'],[50,'🥇','Médaille d\'or'],[100,'💎','Médaille de diamant !']],lowMsg:'Encore un effort…',onStart(){},fmt:n=>String(n)};
+  const cfg={key:'jeu',unit:'',medals:[[10,'🥉','Médaille de bronze'],[25,'🥈','Médaille d\'argent'],[50,'🥇','Médaille d\'or'],[100,'💎','Médaille de diamant !']],lowMsg:'Encore un effort…',onStart(){},fmt:n=>String(n),rowVal:r=>r.best,payload:s=>({score:s}),board:''};
+  let base=null,mode='';const bk=()=>cfg.key+'_best'+(mode?'_'+mode:'');
   const HUB=typeof ChadGang!=='undefined';
   let best=0,hubTop=null,state='menu',overAt=0,muted=false,AC=null;
   const ls=(k,v)=>{try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch{return null}};
@@ -111,19 +116,19 @@ const CG=(()=>{
   function lbHtml(el,d){el.replaceChildren();if(!d||!d.rows||!d.rows.length)return;
     const h=document.createElement('h4');h.textContent='🏆 Classement du hub';el.append(h);
     const line=(rk,name,val,you)=>{const x=document.createElement('div');if(you)x.className='you';[rk,name,val].forEach(t=>{const s=document.createElement('span');s.textContent=t;x.append(s)});el.append(x)};
-    d.rows.slice(0,5).forEach((r,i)=>line(['🥇','🥈','🥉'][i]||(i+1)+'.',r.name+(r.you?' (toi)':''),r.best==null?'–':cfg.fmt(r.best)+(cfg.unit?' '+cfg.unit:''),r.you));
-    if(d.me&&d.me.rank>5)line(d.me.rank+'.','Toi',d.me.best==null?'–':cfg.fmt(d.me.best),true)}
+    d.rows.slice(0,5).forEach((r,i)=>line(['🥇','🥈','🥉'][i]||(i+1)+'.',r.name+(r.you?' (toi)':''),cfg.rowVal(r)==null?'–':cfg.fmt(cfg.rowVal(r))+(cfg.unit?' '+cfg.unit:''),r.you));
+    if(d.me&&d.me.rank>5)line(d.me.rank+'.','Toi',cfg.rowVal(d.me)==null?'–':cfg.fmt(cfg.rowVal(d.me)),true)}
   function loadHub(){if(!HUB||typeof ChadGang.classement!=='function')return;
-    ChadGang.classement().then(d=>{hubTop=d;const r=d.rows&&d.rows[0];
-      $('mHub').textContent=r&&r.best!=null?cfg.fmt(r.best):'–';$('mHubWho').textContent=r?'record de '+r.name:'record du hub';
-      if(d.me&&d.me.best!=null&&better(d.me.best,best)){best=d.me.best;ls(cfg.key+'_best',best)}$('mBest').textContent=best?cfg.fmt(best):'0';
+    const want=cfg.board;ChadGang.classement(want).then(d=>{if(want!==cfg.board)return;hubTop=d;const r=d.rows&&d.rows[0];
+      $('mHub').textContent=r&&cfg.rowVal(r)!=null?cfg.fmt(cfg.rowVal(r)):'–';$('mHubWho').textContent=r?'record de '+r.name:'record du hub';
+      const mb=d.me?cfg.rowVal(d.me):null;if(mb!=null&&(best===0||better(mb,best))){best=mb;ls(bk(),best)}$('mBest').textContent=best?cfg.fmt(best):'0';
       lbHtml($('mLb'),d);if(state==='over')lbHtml($('oLb'),d)}).catch(()=>{})}
   const better=(a,b)=>cfg.lower?(b===0||a<b):a>b;
-  const hubRecord=()=>{const r=hubTop&&hubTop.rows&&hubTop.rows[0];return r&&r.best!=null?r:null};
+  const hubRecord=()=>{const r=hubTop&&hubTop.rows&&hubTop.rows[0];return r&&cfg.rowVal(r)!=null?{...r,best:cfg.rowVal(r)}:null};
   /* affichage */
-  function setScore(n,pop){const e=$('score');e.textContent=cfg.fmt(n);if(pop){e.classList.remove('pop');void e.offsetWidth;e.classList.add('pop')}}
+  function setScore(n,pop){const e=$('score');e.textContent=(cfg.scoreFmt||cfg.fmt)(n);if(pop){e.classList.remove('pop');void e.offsetWidth;e.classList.add('pop')}}
   let tgtNotified=false;
-  function target(score){const r=hubRecord(),t=$('target');if(state!=='play'){t.classList.add('hide');return}
+  function target(score){const r=hubRecord(),t=$('target');if(state!=='play'||cfg.noTarget){t.classList.add('hide');return}
     let txt='';if(r&&!better(score,r.best))txt='👑 '+r.name+' : '+cfg.fmt(r.best);else if(r){txt='👑 NOUVEAU RECORD DU HUB !';if(!tgtNotified){tgtNotified=true;popup('👑 RECORD DU HUB !');sfx.record()}}else if(best)txt='Ton record : '+cfg.fmt(best);
     t.classList.toggle('hide',!txt);t.firstChild.textContent=txt}
   function popup(txt){const d=document.createElement('div');d.className='popup';d.textContent=txt;document.querySelector('.ui').append(d);setTimeout(()=>d.remove(),1400)}
@@ -143,7 +148,7 @@ const CG=(()=>{
     state='play';tgtNotified=false;$('menu').classList.add('hide');$('over').classList.add('hide');$('score').classList.remove('hide');$('hint').classList.remove('hide');setTimeout(()=>$('hint').classList.add('hide'),2600);ac();cfg.onStart(seed);target(0)}
   function over(score,label){
     if(state!=='play')return;state='over';overAt=performance.now();
-    const isBest=score>0&&(best===0||better(score,best));if(isBest){best=score;ls(cfg.key+'_best',best)}
+    const isBest=score>0&&(best===0||better(score,best));if(isBest){best=score;ls(bk(),best)}
     $('oScore').textContent=cfg.fmt(score);$('oBest').textContent=cfg.fmt(best);$('oLabel').textContent=label||'score';
     let m=null;for(const x of cfg.medals)if(cfg.lower?score<=x[0]:score>=x[0])m=x;
     $('medal').textContent=m?m[1]:'💤';$('medalTxt').textContent=m?m[2]:cfg.lowMsg;
@@ -152,9 +157,9 @@ const CG=(()=>{
     if(isBest)tag('⭐ Nouveau record perso !');
     $('score').classList.add('hide');$('target').classList.add('hide');$('hint').classList.add('hide');
     setTimeout(()=>{$('over').classList.remove('hide');lbHtml($('oLb'),hubTop)},cfg.overDelay||600);
-    const payload={score};
+    const payload=cfg.payload(score);
     if(cfg.sim){if(!run){if(HUB)tag('📴 Hors connexion au hub : score non envoyé');return}payload.run=run.run;payload.replay={ev,end:endF===null?(sim?sim.frame:0):endF}}
-    if(HUB&&typeof ChadGang.finPartie==='function'&&score>0){
+    if(HUB&&typeof ChadGang.finPartie==='function'&&payload.score>0){
       ChadGang.finPartie(payload).then(r=>{
         if(r&&r.pending){tag('⏳ Score envoyé aux admins pour vérification');return}
         if(r&&r.record){tag('👑 RECORD DU HUB BATTU !');sfx.record();confetti(160)}else if(isBest){sfx.record();confetti(60)}loadHub()
@@ -166,8 +171,15 @@ const CG=(()=>{
   $('play').onclick=e=>{e.stopPropagation();start()};
   $('again').onclick=e=>{e.stopPropagation();start()};
   addEventListener('keydown',e=>{if((e.code==='Space'||e.code==='Enter')&&(state==='menu'||(state==='over'&&performance.now()-overAt>700))){e.preventDefault();start()}});
-  function init(o){Object.assign(cfg,o);prefetch();best=+ls(cfg.key+'_best')||0;try{muted=ls(cfg.key+'_mute')==='1'}catch{}showMute();$('mBest').textContent=cfg.fmt(best);loadHub()}
-  return{init,start,over,setSim,input,tick,get sim(){return sim},setScore,target,popup,flash,confetti,sfx,get state(){return state},get best(){return best},hubRecord,ac};
+  /* plusieurs modes de jeu (ex. normal + contre la montre), chacun avec son record et son classement du hub */
+  function setMode(id){const m=(cfg.modes||[]).find(x=>(x.id||'')===id)||(cfg.modes||[])[0];if(!m)return;mode=m.id||'';Object.assign(cfg,base,m.set||{},{board:mode});ls(cfg.key+'_mode',mode);
+    best=+ls(bk())||0;$('mBest').textContent=best?cfg.fmt(best):'0';hubTop=null;$('mHub').textContent='–';$('mHubWho').textContent='record du hub';$('mLb').replaceChildren();
+    document.querySelectorAll('#modes .btn').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));loadHub()}
+  function init(o){Object.assign(cfg,o);base={...cfg};
+    if(cfg.modes){const box=$('modes');box.classList.remove('hide');$('toMenu').classList.remove('hide');$('toMenu').onclick=e=>{e.stopPropagation();state='menu';$('over').classList.add('hide');$('menu').classList.remove('hide');loadHub()};for(const m of cfg.modes){const b=document.createElement('button');b.className='btn';b.dataset.m=m.id||'';b.textContent=m.label;b.onclick=e=>{e.stopPropagation();sfx.click();setMode(m.id||'')};box.append(b)}
+      setMode(ls(cfg.key+'_mode')||'');prefetch();try{muted=ls(cfg.key+'_mute')==='1'}catch{}showMute();return}
+    prefetch();best=+ls(bk())||0;try{muted=ls(cfg.key+'_mute')==='1'}catch{}showMute();$('mBest').textContent=cfg.fmt(best);loadHub()}
+  return{get mode(){return mode},init,start,over,setSim,input,tick,get sim(){return sim},setScore,target,popup,flash,confetti,sfx,get state(){return state},get best(){return best},hubRecord,ac};
 })();
 /* ===== Simulation de Crossy Chad (déterministe, rejouée par le hub) ===== */
 var SIM=function(seed,hooks){
@@ -175,7 +187,8 @@ var SIM=function(seed,hooks){
   var st=seed>>>0;function rnd(){st=(st+0x6D2B79F5)>>>0;var t=st;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296}
   var C=9,M=8,HOP=7,TRAIN=13;
   var P={x:4,y:0,fx:4,fromx:4,fromy:0,hop:0,dir:1,onLog:false};
-  var S={frame:0,over:false,dying:0,score:0,C:C,M:M,HOP:HOP,rows:{},gen:-1,cam:-5,buf:0,cause:'',P:P,zone:'g',zoneLeft:4,lastRiverDir:1};
+  var GOAL=hooks.goal||0; // contre la montre : ligne d'arrivée (0 = mode normal, sans fin)
+  var S={goal:GOAL,finished:false,time:0,frame:0,over:false,dying:0,score:0,C:C,M:M,HOP:HOP,rows:{},gen:-1,cam:-5,buf:0,cause:'',P:P,zone:'g',zoneLeft:4,lastRiverDir:1};
   // ---------- génération des rangées (zones : herbe, route, rivière, rails) ----------
   function cars(row,kind){
     var x=-M+rnd()*2,L,list=[];
@@ -184,22 +197,25 @@ var SIM=function(seed,hooks){
     L=x+M;row.L=L;row.o=list;
   }
   // vitesse du prochain train : marchandises lent, train normal ou TGV très rapide (plus rapide en avançant)
-  function trainSpeed(i){var d=Math.min(1,i/160),r=rnd();return Math.min(1,(r<.35?.3+rnd()*.12:r<.75?.5+rnd()*.15:.75+rnd()*.15)*(1+d*.25))}
+  // chaque voie ferrée a son propre hasard : les trains passent au même moment pour tout le monde, quoi que fasse le joueur
+  function mkr(a){var t=a>>>0;return function(){t=(t+0x6D2B79F5)>>>0;var x=t;x=Math.imul(x^(x>>>15),x|1);x^=x+Math.imul(x^(x>>>7),x|61);return((x^(x>>>14))>>>0)/4294967296}}
+  function trainSpeed(i,R){var d=Math.min(1,i/160),r=R();return Math.min(1,(r<.35?.3+R()*.12:r<.75?.5+R()*.15:.75+R()*.15)*(1+d*.25))}
   function genRow(i){
     var d=Math.min(1,i/160),row={i:i};
     if(S.zoneLeft<=0){
       if(S.zone!=='g'){S.zone='g';S.zoneLeft=1+(rnd()<.4?1:0)}
       else{var r=rnd();S.zone=r<.48?'r':r<.78?'w':'t';S.zoneLeft=S.zone==='r'?1+Math.floor(rnd()*(2+d*3)):S.zone==='w'?1+Math.floor(rnd()*(2+d*2)):1+(rnd()<.3?1:0)}
     }
-    if(i<3)S.zone='g';
+    if(i<3||(GOAL&&i>=GOAL-1))S.zone='g'; // départ et arrivée sur l'herbe
     row.t=S.zone;S.zoneLeft--;
-    if(row.t==='g'){row.trees={};if(i>0){var n=Math.floor(rnd()*(2+d*2.5));for(var k=0;k<n;k++){var c=Math.floor(rnd()*C);if(i<3&&c===4)continue;row.trees[c]=1}}}
+    if(row.t==='g'){row.trees={};if(i>0&&!(GOAL&&i>=GOAL)){var n=Math.floor(rnd()*(2+d*2.5));for(var k=0;k<n;k++){var c=Math.floor(rnd()*C);if(i<3&&c===4)continue;row.trees[c]=1}}}
     else if(row.t==='r'){row.dir=rnd()<.5?-1:1;row.sp=(.03+rnd()*.03)*(1+d*.9);cars(row,'r')}
     else if(row.t==='w'){row.dir=-S.lastRiverDir;S.lastRiverDir=row.dir;row.sp=(.018+rnd()*.022)*(1+d*.6);cars(row,'w')}
-    else{row.dir=rnd()<.5?-1:1;row.timer=110+Math.floor(rnd()*220);row.train=null;row.warn=false;row.tsp=trainSpeed(i)}
+    else{row.dir=rnd()<.5?-1:1;row.R=mkr((seed>>>0)+i*7919);row.timer=110+Math.floor(row.R()*220);row.train=null;row.warn=false;row.tsp=trainSpeed(i,row.R)}
     S.rows[i]=row;S.gen=i;
   }
-  while(S.gen<P.y+26)genRow(S.gen+1);
+  // contre la montre : tout le parcours est créé dès le départ (identique pour tous)
+  while(S.gen<P.y+26||(GOAL&&S.gen<GOAL+27))genRow(S.gen+1);
   function wrap(row,o){if(o.x>=-M+row.L)o.x-=row.L;else if(o.x<-M)o.x+=row.L}
   // rondin sous le joueur : on est indulgent sur les bords (comme dans le vrai jeu)
   function logAt(row,x){for(var k=0;k<row.o.length;k++){var o=row.o[k];if(x>o.x-.3&&x<o.x+o.len+.3)return o}return null}
@@ -217,6 +233,7 @@ var SIM=function(seed,hooks){
     if(tr.t==='g'&&tr.trees[Math.round(tx)]){emit('bump');return}
     P.fromx=P.fx;P.fromy=P.y;P.x=tx;P.y=ty;P.hop=HOP;P.onLog=false;emit('hop',c);
     if(P.y>S.score){S.score=P.y;emit('step',S.score)}
+    if(GOAL&&P.y>=GOAL&&!S.over){S.over=true;S.finished=true;S.time=(S.frame+HOP)/60;emit('finish',S.time)}
   }
   S.input=function(c){if(S.over)return;if(P.hop>0){S.buf=c;return}tryHop(c)};
   S.step=function(){
@@ -226,7 +243,7 @@ var SIM=function(seed,hooks){
     for(i=Math.floor(S.cam)-3;i<=S.gen;i++){row=S.rows[i];if(!row)continue;
       if(row.t==='r'||row.t==='w'){for(k=0;k<row.o.length;k++){o=row.o[k];o.x+=row.sp*row.dir;wrap(row,o)}}
       else if(row.t==='t'){
-        if(row.train){row.train.x+=row.train.sp*row.dir;if(row.dir>0?row.train.x>C+M+2:row.train.x+TRAIN<-M-2){row.train=null;row.warn=false;row.tsp=trainSpeed(i);row.timer=200+Math.floor(rnd()*260)}}
+        if(row.train){row.train.x+=row.train.sp*row.dir;if(row.dir>0?row.train.x>C+M+2:row.train.x+TRAIN<-M-2){row.train=null;row.warn=false;row.tsp=trainSpeed(i,row.R);row.timer=200+Math.floor(row.R()*260)}}
         else if(--row.timer<=0){row.train={x:row.dir>0?-M-TRAIN:C+M,sp:row.tsp};emit('train',i)}
         else if(row.timer===85){row.warn=true;emit('warn',i)}
       }}
@@ -234,7 +251,7 @@ var SIM=function(seed,hooks){
     row=S.rows[P.y];
     if(P.hop>0){P.hop--;var k2=P.hop/HOP;P.fx=P.x+(P.fromx-P.x)*k2;
       if(P.hop===0){
-        if(row.t==='w'){var lg=logAt(row,P.x);if(lg){P.x=Math.max(lg.x+.35,Math.min(lg.x+lg.len-.35,P.x));P.fx=P.x;P.onLog=true;emit('log')}else{P.fx=P.x;die('eau')}}
+        if(row.t==='w'){var lg=logAt(row,P.x+.5);if(lg){P.x=Math.max(lg.x-.15,Math.min(lg.x+lg.len-.85,P.x));P.fx=P.x;P.onLog=true;emit('log')}else{P.fx=P.x;die('eau')}}
         else{P.x=Math.round(P.x);P.fx=P.x;emit('land')}
         if(!S.over&&S.buf){var b=S.buf;S.buf=0;tryHop(b)}
       }}
@@ -242,13 +259,13 @@ var SIM=function(seed,hooks){
     // collisions
     // collisions : pendant la 1re moitié du saut on est encore sur la rangée de départ, ensuite sur celle d'arrivée
     if(!S.over){var cr=P.hop>HOP/2?P.fromy:P.y;row=S.rows[cr];
-      if(row&&row.t==='r'){for(k=0;k<row.o.length;k++){o=row.o[k];if(P.fx+.27>o.x+.06&&P.fx-.27<o.x+o.len-.06){die('voiture');break}}}
-      else if(row&&row.t==='t'&&row.train&&P.fx+.3>row.train.x&&P.fx-.3<row.train.x+TRAIN)die('train');}
+      if(row&&row.t==='r'){for(k=0;k<row.o.length;k++){o=row.o[k];var pc=P.fx+.5;if(pc+.27>o.x+.06&&pc-.27<o.x+o.len-.06){die('voiture');break}}}
+      else if(row&&row.t==='t'&&row.train&&P.fx+.8>row.train.x&&P.fx+.2<row.train.x+TRAIN)die('train');}
     // le coach arrive si on traîne
     var sp=.0045+Math.min(.0095,S.score*.00005);S.cam=Math.max(S.cam+sp,P.y-6);
     if(!S.over&&P.y<S.cam&&P.hop===0)die('coach');
     while(S.gen<P.y+26)genRow(S.gen+1);
-    for(i in S.rows)if(+i<S.cam-6)delete S.rows[i];
+    if(!GOAL)for(i in S.rows)if(+i<S.cam-6)delete S.rows[i];
     S.frame++;
   };
   return S;
@@ -261,17 +278,22 @@ function resize(){dpr=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight
   cs=Math.floor(Math.min(W/9.2,H/10.5,74));offX=(W-9*cs)/2;baseY=H*.7}
 addEventListener('resize',resize);resize();
 let S=SIM(1,{}),view=0,V={t:0,parts:[],shake:0,sent:false,squash:0,last:0};
-function newGame(seed){S=SIM(seed,{ev:onEv});CG.setSim(S);view=0;V.parts=[];V.shake=0;V.sent=false;CG.setScore(0)}
+// Contre la montre : toujours le même parcours (même graine pour tout le monde), arrivée à GOAL bonds, une seule vie
+const GOAL=100,CHRONO_SEED=5;
+const fmtT=t=>(Math.round(t*100)/100).toFixed(2).replace('.',',');
+const chronoEl=document.createElement('div');chronoEl.id='chrono';chronoEl.className='hide';document.querySelector('.ui').append(chronoEl);
+function newGame(seed){const ch=CG.mode==='chrono';S=SIM(ch?CHRONO_SEED:seed,{ev:onEv,goal:ch?GOAL:0});chronoEl.classList.toggle('hide',!ch);CG.setSim(S);view=0;V.parts=[];V.shake=0;V.sent=false;CG.setScore(0)}
 const X=cx=>offX+cx*cs, Y=r=>baseY-(r-view)*cs;
 function puff(x,y,c,n,sp){for(let i=0;i<n;i++)V.parts.push({x,y,vx:(Math.random()-.5)*(sp||4),vy:-Math.random()*(sp||4),l:26+Math.random()*14,c,g:.25})}
 function onEv(n,v){const P=S.P;
   if(n==='hop'){CG.sfx.tone(520+Math.random()*60,0,.07,{type:'triangle',v:.22,to:760});V.squash=1}
   else if(n==='bump')CG.sfx.tone(140,0,.06,{type:'square',v:.15});
-  else if(n==='step'){CG.setScore(v,true);CG.target(v);if(v%50===0){CG.popup(v+' bonds 🔥');CG.sfx.big()}}
+  else if(n==='step'){CG.setScore(v,true);CG.target(v);if(v%50===0&&!(S.goal&&v>=S.goal)){CG.popup(v+' bonds 🔥');CG.sfx.big()}}
   else if(n==='log')CG.sfx.tone(300,0,.06,{type:'sine',v:.3});
   else if(n==='land')V.squash=.6;
   else if(n==='warn'){if(Math.abs(v-P.y)<7){CG.sfx.tone(392,0,.35,{type:'sawtooth',v:.22});CG.sfx.tone(330,.38,.45,{type:'sawtooth',v:.22})}} // klaxon
   else if(n==='train'){if(Math.abs(v-P.y)<7){const sp=S.rows[v]&&S.rows[v].train?S.rows[v].train.sp:.6;CG.sfx.noise(0,.5+sp,.7,350+sp*600);CG.sfx.tone(220+sp*200,0,.6,{type:'sawtooth',v:.2,to:120})}}
+  else if(n==='finish'){CG.sfx.record();CG.confetti(180);CG.popup('🏁 ARRIVÉ ! '+fmtT(v)+' s')}
   else if(n==='die'){V.shake=v==='coach'?6:12;const sx=X(P.fx+.5),sy=Y(P.y);
     if(v==='eau'){CG.sfx.noise(0,.4,.8,1400);for(let i=0;i<18;i++)V.parts.push({x:sx,y:sy,vx:(Math.random()-.5)*6,vy:-2-Math.random()*5,l:34,c:i%2?'#fff':'#9be3ff',g:.3});CG.popup('PLOUF ! 💦')}
     else if(v==='voiture'){CG.sfx.hit();CG.flash();puff(sx,sy,'#ffd426',16,7);CG.popup('ÉCRASÉ 🥞')}
@@ -289,7 +311,8 @@ addEventListener('pointerup',e=>{if(e.pointerId!==pid)return;pid=null;const dx=e
 addEventListener('pointercancel',()=>{pid=null});
 // ---------- boucle ----------
 function step(){V.t++;
-  if(CG.state==='play'){CG.tick();if(S.over&&S.dying===50&&!V.sent){V.sent=true;CG.over(S.score,'bonds')}}
+  if(CG.state==='play'){CG.tick();if(S.over&&S.dying===(S.finished?70:50)&&!V.sent){V.sent=true;chronoEl.classList.add('hide');if(!S.goal)CG.over(S.score,'bonds');else if(S.finished)CG.over(S.time,'ton chrono');else CG.over(1e5-S.score,'pas arrivé')}}
+  if(S.goal&&!chronoEl.classList.contains('hide'))chronoEl.innerHTML='<span>⏱️ '+fmtT(S.finished?S.time:S.frame/60)+' s · '+Math.min(S.score,GOAL)+' / '+GOAL+'</span>';
   // sonnerie du passage à niveau tant qu'un train approche près du joueur
   if(CG.state==='play'&&!S.over&&V.t%18===0)for(let r=S.P.y-3;r<=S.P.y+5;r++){const row=S.rows[r];if(row&&row.t==='t'&&row.warn&&!row.train){CG.sfx.tone(1250,0,.09,{type:'triangle',v:.25});break}}
   const want=Math.max(S.P.y,S.cam+(H-baseY)/cs-.4);view+=(want-view)*.12;
@@ -306,6 +329,8 @@ function block(x0,x1,cy,h,col,inset){inset=inset==null?cs*.1:inset;const ft=cy-c
   ctx.strokeStyle='#12102b66';ctx.lineWidth=1.5;ctx.strokeRect(x0+.75,top+.75,x1-x0-1.5,fb-top-1.5);return top}
 const CARC=['#ff4f6d','#ffd426','#5cc8ff','#c86bff','#ff9f1c'];
 function drawGround(r,row,cy){const y0=cy-cs/2;
+  if(S.goal&&r===S.goal){ctx.fillStyle='#fff';ctx.fillRect(0,y0,W,cs+1);const q=cs/4;for(let x=0;x<W/q+1;x++)for(let y=0;y<4;y++)if((x+y)%2){ctx.fillStyle='#12102b';ctx.fillRect(x*q-(offX%q),y0+y*q,q,q)}
+    ctx.font=`900 ${cs*.42}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=6;ctx.strokeStyle='#12102b';ctx.fillStyle='#ffd426';ctx.strokeText('🏁 ARRIVÉE',W/2,y0+cs/2);ctx.fillText('🏁 ARRIVÉE',W/2,y0+cs/2);ctx.textBaseline='alphabetic';return}
   if(row.t==='g'){ctx.fillStyle=r%2?'#7fe07a':'#74d46f';ctx.fillRect(0,y0,W,cs+1);ctx.fillStyle='#0000000f';for(let c=-12;c<21;c++)if(hash(r,c)<.18)ctx.fillRect(X(c+hash(c,r)),y0+cs*hash(r,c+7),3,6)}
   else if(row.t==='r'){ctx.fillStyle='#4b4a63';ctx.fillRect(0,y0,W,cs+1);const nb=S.rows[r+1];if(nb&&nb.t==='r'){ctx.fillStyle='#ffffffaa';for(let x=offX%(cs)-cs;x<W;x+=cs)ctx.fillRect(x+cs*.2,y0-2,cs*.5,4)}
     const pb=S.rows[r-1];if(!pb||pb.t!=='r'){ctx.fillStyle='#9a99b3';ctx.fillRect(0,y0+cs-5,W,5)}if(!nb||nb.t!=='r'){ctx.fillStyle='#9a99b3';ctx.fillRect(0,y0,W,5)}}
@@ -376,7 +401,12 @@ function draw(){
 }
 let last=performance.now(),acc=0;function frame(now){acc+=Math.min(100,now-last);last=now;while(acc>=1000/60){step();acc-=1000/60}draw();requestAnimationFrame(frame)}
 document.addEventListener('visibilitychange',()=>{last=performance.now();acc=0});
-CG.init({key:'crossychad',unit:'bonds',sim:true,medals:[[25,'🥉','Piéton prudent'],[60,'🥈','Roi du passage piéton'],[120,'🥇','Traverseur d\'élite'],[200,'💎','Immortel de l\'autoroute']],lowMsg:'Même pas traversé…',onStart:newGame});
+CG.init({key:'crossychad',unit:'bonds',sim:true,medals:[[25,'🥉','Piéton prudent'],[60,'🥈','Roi du passage piéton'],[120,'🥇','Traverseur d\'élite'],[200,'💎','Immortel de l\'autoroute']],lowMsg:'Même pas traversé…',onStart:newGame,
+  modes:[{id:'',label:'♾️ Normal'},{id:'chrono',label:'⏱️ Contre la montre',set:{unit:'',lower:true,noTarget:true,scoreFmt:n=>String(n),
+    // valeur classée : temps d'arrivée (s), ou 100000 - distance si pas arrivé (toujours derrière les arrivés)
+    fmt:v=>v<1e4?fmtT(v)+' s':(1e5-v)+' bonds',rowVal:r=>r.time!=null?r.time:r.best!=null?1e5-r.best:null,
+    payload:v=>v<1e4?{score:GOAL,tableau:'chrono',temps:v}:{score:1e5-v,tableau:'chrono'},
+    medals:[[9999,'🥉','Arrivé au bout !'],[70,'🥈','Rapide comme l\'éclair'],[55,'🥇','Fusée humaine'],[45,'💎','Intouchable']],lowMsg:'Pas arrivé au bout… même parcours, retente !'}}]});
 requestAnimationFrame(frame);
 
 </script>

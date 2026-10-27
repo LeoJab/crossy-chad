@@ -7,5 +7,13 @@
   "image": "cover.png",
   "classement": "score",
   "unite": "bonds",
-  "verif": "crossy-chad"
+  "classements": [
+    {
+      "id": "chrono",
+      "titre": "Contre la montre",
+      "classement": "course",
+      "unite": "bonds",
+      "objectif": 100
+    }
+  ]
 }
