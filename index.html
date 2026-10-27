@@ -90,7 +90,7 @@ for(const ev of ['touchmove','touchstart'])document.addEventListener(ev,e=>{if(!
 document.addEventListener('gesturestart',e=>e.preventDefault());
 const CG=(()=>{
   const cfg={key:'jeu',unit:'',medals:[[10,'🥉','Médaille de bronze'],[25,'🥈','Médaille d\'argent'],[50,'🥇','Médaille d\'or'],[100,'💎','Médaille de diamant !']],lowMsg:'Encore un effort…',onStart(){},fmt:n=>String(n),rowVal:r=>r.best,payload:s=>({score:s}),board:''};
-  let base=null,mode='';const bk=()=>cfg.key+'_best'+(mode?'_'+mode:'');
+  let base=null,mode='',boardKo=false;const bk=()=>cfg.key+'_best'+(mode?'_'+mode:'');
   const HUB=typeof ChadGang!=='undefined';
   let best=0,hubTop=null,state='menu',overAt=0,muted=false,AC=null;
   const ls=(k,v)=>{try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch{return null}};
@@ -120,7 +120,7 @@ const CG=(()=>{
     d.rows.slice(0,5).forEach((r,i)=>line(['🥇','🥈','🥉'][i]||(i+1)+'.',r.name+(r.you?' (toi)':''),cfg.rowVal(r)==null?'–':cfg.fmt(cfg.rowVal(r))+(cfg.unit?' '+cfg.unit:''),r.you));
     if(d.me&&d.me.rank>5)line(d.me.rank+'.','Toi',cfg.rowVal(d.me)==null?'–':cfg.fmt(cfg.rowVal(d.me)),true)}
   function loadHub(){if(!HUB||typeof ChadGang.classement!=='function')return;
-    const want=cfg.board;ChadGang.classement(want).then(d=>{if(want!==cfg.board)return;hubTop=d;const r=d.rows&&d.rows[0];
+    const want=cfg.board;ChadGang.classement(want).then(d=>{if(want!==cfg.board)return;if(want&&d.board!==want){boardKo=true;$('mLb').replaceChildren();$('mHubWho').textContent='hub pas à jour';return}boardKo=false;hubTop=d;const r=d.rows&&d.rows[0];
       $('mHub').textContent=r&&cfg.rowVal(r)!=null?cfg.fmt(cfg.rowVal(r)):'–';$('mHubWho').textContent=r?'record de '+r.name:'record du hub';
       const mb=d.me?cfg.rowVal(d.me):null;if(mb!=null&&(best===0||better(mb,best))){best=mb;ls(bk(),best);drawRecs()}$('mBest').textContent=best?cfg.fmt(best):'0';
       lbHtml($('mLb'),d);if(state==='over')lbHtml($('oLb'),d)}).catch(()=>{})}
@@ -149,7 +149,7 @@ const CG=(()=>{
     state='play';tgtNotified=false;$('menu').classList.add('hide');$('over').classList.add('hide');$('score').classList.remove('hide');$('hint').classList.remove('hide');setTimeout(()=>$('hint').classList.add('hide'),2600);ac();cfg.onStart(seed);target(0)}
   function over(score,label){
     if(state!=='play')return;state='over';overAt=performance.now();
-    const isBest=score>0&&(best===0||better(score,best));if(isBest){best=score;ls(bk(),best);drawRecs()}
+    const isBest=(cfg.valid?cfg.valid(score):score>0)&&(best===0||better(score,best));if(isBest){best=score;ls(bk(),best);drawRecs()}
     $('oScore').textContent=cfg.fmt(score);$('oBest').textContent=cfg.fmt(best);$('oLabel').textContent=label||'score';
     let m=null;for(const x of cfg.medals)if(cfg.lower?score<=x[0]:score>=x[0])m=x;
     $('medal').textContent=m?m[1]:'💤';$('medalTxt').textContent=m?m[2]:cfg.lowMsg;
@@ -160,6 +160,7 @@ const CG=(()=>{
     setTimeout(()=>{$('over').classList.remove('hide');lbHtml($('oLb'),hubTop)},cfg.overDelay||600);
     const payload=cfg.payload(score);
     if(cfg.sim){if(!run){if(HUB)tag('📴 Hors connexion au hub : score non envoyé');return}payload.run=run.run;payload.replay={ev,end:endF===null?(sim?sim.frame:0):endF}}
+    if(HUB&&cfg.board&&boardKo){tag('⚠️ Le hub doit être mis à jour : score non envoyé');if(isBest){sfx.record();confetti(60)}return}
     if(HUB&&typeof ChadGang.finPartie==='function'&&payload.score>0){
       ChadGang.finPartie(payload).then(r=>{
         if(r&&r.pending){tag('⏳ Score envoyé aux admins pour vérification');return}
@@ -406,7 +407,7 @@ function draw(){
 let last=performance.now(),acc=0;function frame(now){acc+=Math.min(100,now-last);last=now;while(acc>=1000/60){step();acc-=1000/60}draw();requestAnimationFrame(frame)}
 document.addEventListener('visibilitychange',()=>{last=performance.now();acc=0});
 CG.init({key:'crossychad',unit:'bonds',sim:true,medals:[[25,'🥉','Piéton prudent'],[60,'🥈','Roi du passage piéton'],[120,'🥇','Traverseur d\'élite'],[200,'💎','Immortel de l\'autoroute']],lowMsg:'Même pas traversé…',onStart:newGame,
-  modes:[{id:'',label:'♾️ Normal'},{id:'chrono',label:'⏱️ Contre la montre',set:{unit:'',lower:true,noTarget:true,scoreFmt:n=>String(n),
+  modes:[{id:'',label:'♾️ Normal'},{id:'chrono',label:'⏱️ Contre la montre',set:{unit:'',lower:true,noTarget:true,valid:v=>v>0&&v<1e5,scoreFmt:n=>String(n),
     // valeur classée : temps d'arrivée (s), ou 100000 - distance si pas arrivé (toujours derrière les arrivés)
     fmt:v=>v<1e4?fmtT(v)+' s':(1e5-v)+' bonds',rowVal:r=>r.time!=null?r.time:r.best!=null?1e5-r.best:null,
     payload:v=>v<1e4?{score:GOAL,tableau:'chrono',temps:v}:{score:1e5-v,tableau:'chrono'},
