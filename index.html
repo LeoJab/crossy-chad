@@ -45,6 +45,7 @@ canvas{display:block;touch-action:none}
 @keyframes fl{from{opacity:.85}to{opacity:0}}
 .popup{position:absolute;left:0;right:0;top:28%;text-align:center;font-size:clamp(26px,5vw,40px);font-weight:900;color:var(--sun);-webkit-text-stroke:3px var(--ink);paint-order:stroke fill;text-shadow:0 4px 0 var(--ink);pointer-events:none;animation:popup 1.3s ease-out forwards}
 @keyframes popup{0%{transform:scale(.3);opacity:0}15%{transform:scale(1.15);opacity:1}30%{transform:scale(1)}80%{opacity:1}100%{transform:translateY(-40px);opacity:0}}
+.mrecs{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:6px 0 0;font-weight:800;font-size:13px;color:var(--ink)}.mrecs span{background:#f1efff;border:2px solid var(--ink);border-radius:99px;padding:2px 10px}
 .modes{display:flex;gap:8px;justify-content:center;margin:10px 0 2px;flex-wrap:wrap}.modes .btn{font-size:14px;padding:7px 12px;opacity:.6}.modes .btn.on{background:var(--sun);opacity:1}
 #confetti{position:absolute;inset:0;pointer-events:none;width:100%;height:100%}
 
@@ -64,7 +65,7 @@ canvas{display:block;touch-action:none}
   <div class="panel" id="menu">
     <div class="title">CROSSY<br>CHAD</div>
     <p class="muted">Traverse les routes, les rivières et les voies ferrées sans finir en crêpe. Mode normal : va le plus loin possible. Contre la montre : le même parcours pour tout le monde, arrive au bond 100 le plus vite possible !</p>
-    <div class="modes hide" id="modes"></div>
+    <div class="modes hide" id="modes"></div><div class="mrecs hide" id="mrecs"></div>
     <div class="row"><div class="stat"><b id="mBest">0</b><small>ton record</small></div><div class="stat"><b id="mHub">–</b><small id="mHubWho">record du hub</small></div></div>
     <button class="btn primary" id="play">▶ Jouer</button>
     <p class="muted" style="margin-top:8px;font-size:12px">↑ avancer · ← → aller sur le côté · ↓ reculer · sur téléphone : tape pour avancer, glisse pour tourner</p>
@@ -121,7 +122,7 @@ const CG=(()=>{
   function loadHub(){if(!HUB||typeof ChadGang.classement!=='function')return;
     const want=cfg.board;ChadGang.classement(want).then(d=>{if(want!==cfg.board)return;hubTop=d;const r=d.rows&&d.rows[0];
       $('mHub').textContent=r&&cfg.rowVal(r)!=null?cfg.fmt(cfg.rowVal(r)):'–';$('mHubWho').textContent=r?'record de '+r.name:'record du hub';
-      const mb=d.me?cfg.rowVal(d.me):null;if(mb!=null&&(best===0||better(mb,best))){best=mb;ls(bk(),best)}$('mBest').textContent=best?cfg.fmt(best):'0';
+      const mb=d.me?cfg.rowVal(d.me):null;if(mb!=null&&(best===0||better(mb,best))){best=mb;ls(bk(),best);drawRecs()}$('mBest').textContent=best?cfg.fmt(best):'0';
       lbHtml($('mLb'),d);if(state==='over')lbHtml($('oLb'),d)}).catch(()=>{})}
   const better=(a,b)=>cfg.lower?(b===0||a<b):a>b;
   const hubRecord=()=>{const r=hubTop&&hubTop.rows&&hubTop.rows[0];return r&&cfg.rowVal(r)!=null?{...r,best:cfg.rowVal(r)}:null};
@@ -148,7 +149,7 @@ const CG=(()=>{
     state='play';tgtNotified=false;$('menu').classList.add('hide');$('over').classList.add('hide');$('score').classList.remove('hide');$('hint').classList.remove('hide');setTimeout(()=>$('hint').classList.add('hide'),2600);ac();cfg.onStart(seed);target(0)}
   function over(score,label){
     if(state!=='play')return;state='over';overAt=performance.now();
-    const isBest=score>0&&(best===0||better(score,best));if(isBest){best=score;ls(bk(),best)}
+    const isBest=score>0&&(best===0||better(score,best));if(isBest){best=score;ls(bk(),best);drawRecs()}
     $('oScore').textContent=cfg.fmt(score);$('oBest').textContent=cfg.fmt(best);$('oLabel').textContent=label||'score';
     let m=null;for(const x of cfg.medals)if(cfg.lower?score<=x[0]:score>=x[0])m=x;
     $('medal').textContent=m?m[1]:'💤';$('medalTxt').textContent=m?m[2]:cfg.lowMsg;
@@ -174,7 +175,10 @@ const CG=(()=>{
   /* plusieurs modes de jeu (ex. normal + contre la montre), chacun avec son record et son classement du hub */
   function setMode(id){const m=(cfg.modes||[]).find(x=>(x.id||'')===id)||(cfg.modes||[])[0];if(!m)return;mode=m.id||'';Object.assign(cfg,base,m.set||{},{board:mode});ls(cfg.key+'_mode',mode);
     best=+ls(bk())||0;$('mBest').textContent=best?cfg.fmt(best):'0';hubTop=null;$('mHub').textContent='–';$('mHubWho').textContent='record du hub';$('mLb').replaceChildren();
-    document.querySelectorAll('#modes .btn').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));loadHub()}
+    document.querySelectorAll('#modes .btn').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));drawRecs();loadHub()}
+  function drawRecs(){const box=$('mrecs');if(!cfg.modes)return;box.classList.remove('hide');box.replaceChildren();
+    for(const m of cfg.modes){const c={...base,...(m.set||{})},v=+ls(cfg.key+'_best'+(m.id?'_'+m.id:''))||0,s=document.createElement('span');
+      s.textContent=m.label.split(' ')[0]+' record : '+(v?c.fmt(v)+(c.unit?' '+c.unit:''):'–');box.append(s)}}
   function init(o){Object.assign(cfg,o);base={...cfg};
     if(cfg.modes){const box=$('modes');box.classList.remove('hide');$('toMenu').classList.remove('hide');$('toMenu').onclick=e=>{e.stopPropagation();state='menu';$('over').classList.add('hide');$('menu').classList.remove('hide');loadHub()};for(const m of cfg.modes){const b=document.createElement('button');b.className='btn';b.dataset.m=m.id||'';b.textContent=m.label;b.onclick=e=>{e.stopPropagation();sfx.click();setMode(m.id||'')};box.append(b)}
       setMode(ls(cfg.key+'_mode')||'');prefetch();try{muted=ls(cfg.key+'_mute')==='1'}catch{}showMute();return}
