@@ -45,7 +45,7 @@ canvas{display:block;touch-action:none}
 @keyframes fl{from{opacity:.85}to{opacity:0}}
 .popup{position:absolute;left:0;right:0;top:28%;text-align:center;font-size:clamp(26px,5vw,40px);font-weight:900;color:var(--sun);-webkit-text-stroke:3px var(--ink);paint-order:stroke fill;text-shadow:0 4px 0 var(--ink);pointer-events:none;animation:popup 1.3s ease-out forwards}
 @keyframes popup{0%{transform:scale(.3);opacity:0}15%{transform:scale(1.15);opacity:1}30%{transform:scale(1)}80%{opacity:1}100%{transform:translateY(-40px);opacity:0}}
-.mrecs{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:6px 0 0;font-weight:800;font-size:13px;color:var(--ink)}.mrecs span{background:#f1efff;border:2px solid var(--ink);border-radius:99px;padding:2px 10px}
+.mnote{margin:6px auto 0;max-width:340px;text-align:center;font-weight:700;font-size:12px;color:var(--ink);opacity:.8}.mrecs{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:6px 0 0;font-weight:800;font-size:13px;color:var(--ink)}.mrecs span{background:#f1efff;border:2px solid var(--ink);border-radius:99px;padding:2px 10px}
 .modes{display:flex;gap:8px;justify-content:center;margin:10px 0 2px;flex-wrap:wrap}.modes .btn{font-size:14px;padding:7px 12px;opacity:.6}.modes .btn.on{background:var(--sun);opacity:1}
 #confetti{position:absolute;inset:0;pointer-events:none;width:100%;height:100%}
 
@@ -64,8 +64,8 @@ canvas{display:block;touch-action:none}
   <div class="hint hide" id="hint"><span>Tape pour avancer · glisse ← → ↓ pour tourner</span></div>
   <div class="panel" id="menu">
     <div class="title">CROSSY<br>CHAD</div>
-    <p class="muted">Traverse les routes, les rivières et les voies ferrées sans finir en crêpe. Mode normal : va le plus loin possible. Contre la montre : le même parcours pour tout le monde, arrive au bond 100 le plus vite possible !</p>
-    <div class="modes hide" id="modes"></div><div class="mrecs hide" id="mrecs"></div>
+    <p class="muted">Traverse les routes, les rivières et les voies ferrées sans finir en crêpe. Mode normal : va le plus loin possible. Contre la montre : une nouvelle carte chaque vendredi à 12 h, la même pour tout le monde, arrive au bond 100 le plus vite possible !</p>
+    <div class="modes hide" id="modes"></div><div class="mrecs hide" id="mrecs"></div><div class="mnote hide" id="mnote"></div>
     <div class="row"><div class="stat"><b id="mBest">0</b><small>ton record</small></div><div class="stat"><b id="mHub">–</b><small id="mHubWho">record du hub</small></div></div>
     <button class="btn primary" id="play">▶ Jouer</button>
     <p class="muted" style="margin-top:8px;font-size:12px">↑ avancer · ← → aller sur le côté · ↓ reculer · sur téléphone : tape pour avancer, glisse pour tourner</p>
@@ -88,9 +88,14 @@ const $=id=>document.getElementById(id);
 // Les gestes servent au jeu : on empêche la page (et le hub autour) de défiler ou de rebondir, sauf dans les menus
 for(const ev of ['touchmove','touchstart'])document.addEventListener(ev,e=>{if(!e.target.closest('.panel,button,#top'))e.preventDefault()},{passive:false});
 document.addEventListener('gesturestart',e=>e.preventDefault());
+/* semaine du hub : change chaque vendredi à 12h (heure de Paris), même calcul que le serveur */
+const WK=(()=>{const W=7*864e5,EP=Date.UTC(2024,0,5,12),f=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Paris',hourCycle:'h23',year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'numeric',second:'numeric'});
+  return ()=>{const o={};try{for(const p of f.formatToParts(Date.now()))o[p.type]=+p.value}catch{const d=new Date();return{n:0,id:'local',left:0,date:'',seed:1}}
+    const wall=Date.UTC(o.year,o.month-1,o.day,o.hour,o.minute,o.second),n=Math.floor((wall-EP)/W),id=new Date(EP+n*W).toISOString().slice(0,10);
+    return{n,id,left:EP+(n+1)*W-wall,seed:(Math.imul(n+7,2654435761)>>>0)%2147483646+1}}})();
 const CG=(()=>{
   const cfg={key:'jeu',unit:'',medals:[[10,'🥉','Médaille de bronze'],[25,'🥈','Médaille d\'argent'],[50,'🥇','Médaille d\'or'],[100,'💎','Médaille de diamant !']],lowMsg:'Encore un effort…',onStart(){},fmt:n=>String(n),rowVal:r=>r.best,payload:s=>({score:s}),board:''};
-  let base=null,mode='',boardKo=false;const bk=()=>cfg.key+'_best'+(mode?'_'+mode:'');
+  let base=null,mode='',boardKo=false;const bk=()=>cfg.key+'_best'+(mode?'_'+mode:'')+(cfg.weekly?'_'+WK().id:'');
   const HUB=typeof ChadGang!=='undefined';
   let best=0,hubTop=null,state='menu',overAt=0,muted=false,AC=null;
   const ls=(k,v)=>{try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch{return null}};
@@ -119,8 +124,8 @@ const CG=(()=>{
     const line=(rk,name,val,you)=>{const x=document.createElement('div');if(you)x.className='you';[rk,name,val].forEach(t=>{const s=document.createElement('span');s.textContent=t;x.append(s)});el.append(x)};
     d.rows.slice(0,5).forEach((r,i)=>line(['🥇','🥈','🥉'][i]||(i+1)+'.',r.name+(r.you?' (toi)':''),cfg.rowVal(r)==null?'–':cfg.fmt(cfg.rowVal(r))+(cfg.unit?' '+cfg.unit:''),r.you));
     if(d.me&&d.me.rank>5)line(d.me.rank+'.','Toi',cfg.rowVal(d.me)==null?'–':cfg.fmt(cfg.rowVal(d.me)),true)}
-  function loadHub(){if(!HUB||typeof ChadGang.classement!=='function')return;
-    const want=cfg.board;ChadGang.classement(want).then(d=>{if(want!==cfg.board)return;if(want&&d.board!==want){boardKo=true;$('mLb').replaceChildren();$('mHubWho').textContent='hub pas à jour';return}boardKo=false;hubTop=d;const r=d.rows&&d.rows[0];
+  function loadHub(){const nt=cfg.note?cfg.note():'';$('mnote').textContent=nt;$('mnote').classList.toggle('hide',!nt);if(!HUB||typeof ChadGang.classement!=='function')return;
+    const want=cfg.board;ChadGang.classement(want).then(d=>{if(want!==cfg.board)return;if(want&&(d.board!==want||(cfg.weekly&&!d.period))){boardKo=true;$('mLb').replaceChildren();$('mHubWho').textContent='hub pas à jour';return}boardKo=false;hubTop=d;const r=d.rows&&d.rows[0];
       $('mHub').textContent=r&&cfg.rowVal(r)!=null?cfg.fmt(cfg.rowVal(r)):'–';$('mHubWho').textContent=r?'record de '+r.name:'record du hub';
       const mb=d.me?cfg.rowVal(d.me):null;if(mb!=null&&(best===0||better(mb,best))){best=mb;ls(bk(),best);drawRecs()}$('mBest').textContent=best?cfg.fmt(best):cfg.fmt(0);
       lbHtml($('mLb'),d);if(state==='over')lbHtml($('oLb'),d)}).catch(()=>{})}
@@ -146,6 +151,7 @@ const CG=(()=>{
     if(cfg.sim&&canRun()&&!ticket){$('play').disabled=$('again').disabled=true;await Promise.race([prefetch(),new Promise(r=>setTimeout(r,2500))]);$('play').disabled=$('again').disabled=false}
     run=ticket;ticket=null;prefetch();
     const seed=run?run.seed:(Math.random()*2147483646|0)+1;
+    if(cfg.weekly)best=+ls(bk())||0;
     state='play';tgtNotified=false;$('menu').classList.add('hide');$('over').classList.add('hide');$('score').classList.remove('hide');$('hint').classList.remove('hide');setTimeout(()=>$('hint').classList.add('hide'),2600);ac();cfg.onStart(seed);target(0)}
   function over(score,label){
     if(state!=='play')return;state='over';overAt=performance.now();
@@ -176,9 +182,9 @@ const CG=(()=>{
   /* plusieurs modes de jeu (ex. normal + contre la montre), chacun avec son record et son classement du hub */
   function setMode(id){const m=(cfg.modes||[]).find(x=>(x.id||'')===id)||(cfg.modes||[])[0];if(!m)return;mode=m.id||'';Object.assign(cfg,base,m.set||{},{board:mode});ls(cfg.key+'_mode',mode);
     best=+ls(bk())||0;$('mBest').textContent=best?cfg.fmt(best):cfg.fmt(0);hubTop=null;$('mHub').textContent='–';$('mHubWho').textContent='record du hub';$('mLb').replaceChildren();
-    document.querySelectorAll('#modes .btn').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));drawRecs();loadHub()}
+    document.querySelectorAll('#modes .btn').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));const nt=cfg.note?cfg.note():'';$('mnote').textContent=nt;$('mnote').classList.toggle('hide',!nt);drawRecs();loadHub()}
   function drawRecs(){const box=$('mrecs');if(!cfg.modes)return;box.classList.remove('hide');box.replaceChildren();
-    for(const m of cfg.modes){const c={...base,...(m.set||{})},v=+ls(cfg.key+'_best'+(m.id?'_'+m.id:''))||0,s=document.createElement('span');
+    for(const m of cfg.modes){const c={...base,...(m.set||{})},v=+ls(cfg.key+'_best'+(m.id?'_'+m.id:'')+(c.weekly?'_'+WK().id:''))||0,s=document.createElement('span');
       s.textContent=m.label.split(' ')[0]+' record : '+(v?c.fmt(v)+(c.unit?' '+c.unit:''):'–');box.append(s)}}
   function init(o){Object.assign(cfg,o);base={...cfg};
     if(cfg.modes){const box=$('modes');box.classList.remove('hide');$('toMenu').classList.remove('hide');$('toMenu').onclick=e=>{e.stopPropagation();state='menu';$('over').classList.add('hide');$('menu').classList.remove('hide');loadHub()};for(const m of cfg.modes){const b=document.createElement('button');b.className='btn';b.dataset.m=m.id||'';b.textContent=m.label;b.onclick=e=>{e.stopPropagation();sfx.click();setMode(m.id||'')};box.append(b)}
@@ -284,10 +290,12 @@ function resize(){dpr=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight
 addEventListener('resize',resize);resize();
 let S=SIM(1,{}),view=0,V={t:0,parts:[],shake:0,sent:false,squash:0,last:0};
 // Contre la montre : toujours le même parcours (même graine pour tout le monde), arrivée à GOAL bonds, une seule vie
-const GOAL=100,CHRONO_SEED=5;
+// La carte change chaque vendredi à 12h (heure de Paris) : nouvelle carte, nouveau classement
+const GOAL=100;
+const weekNote=()=>{const w=WK(),m=Math.floor(w.left/60000),d=Math.floor(m/1440),h=Math.floor(m%1440/60);return '🗓️ Carte de la semaine · la prochaine arrive dans '+(d?d+' j '+h+' h':h+' h '+m%60+' min')+' (vendredi 12 h)'};
 const fmtT=t=>(Math.round(t*100)/100).toFixed(2).replace('.',',');
 const chronoEl=document.createElement('div');chronoEl.id='chrono';chronoEl.className='hide';document.querySelector('.ui').append(chronoEl);
-function newGame(seed){const ch=CG.mode==='chrono';S=SIM(ch?CHRONO_SEED:seed,{ev:onEv,goal:ch?GOAL:0});chronoEl.classList.toggle('hide',!ch);CG.setSim(S);view=0;V.parts=[];V.shake=0;V.sent=false;CG.setScore(0)}
+function newGame(seed){const ch=CG.mode==='chrono';V.week=WK().id;S=SIM(ch?WK().seed:seed,{ev:onEv,goal:ch?GOAL:0});chronoEl.classList.toggle('hide',!ch);CG.setSim(S);view=0;V.parts=[];V.shake=0;V.sent=false;CG.setScore(0)}
 const X=cx=>offX+cx*cs, Y=r=>baseY-(r-view)*cs;
 function puff(x,y,c,n,sp){for(let i=0;i<n;i++)V.parts.push({x,y,vx:(Math.random()-.5)*(sp||4),vy:-Math.random()*(sp||4),l:26+Math.random()*14,c,g:.25})}
 function onEv(n,v){const P=S.P;
@@ -409,10 +417,10 @@ document.addEventListener('visibilitychange',()=>{last=performance.now();acc=0})
 // anciens records perso du contre la montre comptés en bonds (avant cette version) : on les oublie
 try{const k='crossychad_best_chrono',v=+localStorage.getItem(k);if(v>=1e4||v<0)localStorage.removeItem(k)}catch{}
 CG.init({key:'crossychad',unit:'bonds',sim:true,medals:[[25,'🥉','Piéton prudent'],[60,'🥈','Roi du passage piéton'],[120,'🥇','Traverseur d\'élite'],[200,'💎','Immortel de l\'autoroute']],lowMsg:'Même pas traversé…',onStart:newGame,
-  modes:[{id:'',label:'♾️ Normal'},{id:'chrono',label:'⏱️ Contre la montre',set:{unit:'',lower:true,noTarget:true,valid:v=>v>0,scoreFmt:n=>String(n),
+  modes:[{id:'',label:'♾️ Normal'},{id:'chrono',label:'⏱️ Contre la montre',set:{unit:'',lower:true,noTarget:true,weekly:true,note:weekNote,valid:v=>v>0,scoreFmt:n=>String(n),
     // seul le temps d'arrivée compte : une partie non terminée (valeur négative = distance) n'est ni un record ni envoyée au hub
     fmt:v=>v>0?fmtT(v)+' s':v<0?(-v)+'':'–',rowVal:r=>r.time!=null?r.time:null,
-    payload:v=>v>0?{score:GOAL,tableau:'chrono',temps:v}:{score:0},
+    payload:v=>v>0?{score:GOAL,tableau:'chrono',temps:v,periode:V.week}:{score:0},
     medals:[[9999,'🥉','Arrivé au bout !'],[70,'🥈','Rapide comme l\'éclair'],[55,'🥇','Fusée humaine'],[45,'💎','Intouchable']],lowMsg:'Pas arrivé au bout… même parcours, retente !'}}]});
 requestAnimationFrame(frame);
 

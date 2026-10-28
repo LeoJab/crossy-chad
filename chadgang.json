@@ -13,7 +13,8 @@
       "titre": "Contre la montre",
       "classement": "course",
       "unite": "bonds",
-      "objectif": 100
+      "objectif": 100,
+      "periode": "semaine"
     }
   ]
 }
