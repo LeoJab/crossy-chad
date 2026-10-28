@@ -122,7 +122,7 @@ const CG=(()=>{
   function loadHub(){if(!HUB||typeof ChadGang.classement!=='function')return;
     const want=cfg.board;ChadGang.classement(want).then(d=>{if(want!==cfg.board)return;if(want&&d.board!==want){boardKo=true;$('mLb').replaceChildren();$('mHubWho').textContent='hub pas à jour';return}boardKo=false;hubTop=d;const r=d.rows&&d.rows[0];
       $('mHub').textContent=r&&cfg.rowVal(r)!=null?cfg.fmt(cfg.rowVal(r)):'–';$('mHubWho').textContent=r?'record de '+r.name:'record du hub';
-      const mb=d.me?cfg.rowVal(d.me):null;if(mb!=null&&(best===0||better(mb,best))){best=mb;ls(bk(),best);drawRecs()}$('mBest').textContent=best?cfg.fmt(best):'0';
+      const mb=d.me?cfg.rowVal(d.me):null;if(mb!=null&&(best===0||better(mb,best))){best=mb;ls(bk(),best);drawRecs()}$('mBest').textContent=best?cfg.fmt(best):cfg.fmt(0);
       lbHtml($('mLb'),d);if(state==='over')lbHtml($('oLb'),d)}).catch(()=>{})}
   const better=(a,b)=>cfg.lower?(b===0||a<b):a>b;
   const hubRecord=()=>{const r=hubTop&&hubTop.rows&&hubTop.rows[0];return r&&cfg.rowVal(r)!=null?{...r,best:cfg.rowVal(r)}:null};
@@ -151,7 +151,7 @@ const CG=(()=>{
     if(state!=='play')return;state='over';overAt=performance.now();
     const isBest=(cfg.valid?cfg.valid(score):score>0)&&(best===0||better(score,best));if(isBest){best=score;ls(bk(),best);drawRecs()}
     $('oScore').textContent=cfg.fmt(score);$('oBest').textContent=cfg.fmt(best);$('oLabel').textContent=label||'score';
-    let m=null;for(const x of cfg.medals)if(cfg.lower?score<=x[0]:score>=x[0])m=x;
+    let m=null;if(!cfg.valid||cfg.valid(score))for(const x of cfg.medals)if(cfg.lower?score<=x[0]:score>=x[0])m=x;
     $('medal').textContent=m?m[1]:'💤';$('medalTxt').textContent=m?m[2]:cfg.lowMsg;
     const rb=$('recBox');rb.replaceChildren();
     const tag=t=>{rb.replaceChildren();const s=document.createElement('div');s.className='rec';s.textContent=t;rb.append(s)};
@@ -175,7 +175,7 @@ const CG=(()=>{
   addEventListener('keydown',e=>{if((e.code==='Space'||e.code==='Enter')&&(state==='menu'||(state==='over'&&performance.now()-overAt>700))){e.preventDefault();start()}});
   /* plusieurs modes de jeu (ex. normal + contre la montre), chacun avec son record et son classement du hub */
   function setMode(id){const m=(cfg.modes||[]).find(x=>(x.id||'')===id)||(cfg.modes||[])[0];if(!m)return;mode=m.id||'';Object.assign(cfg,base,m.set||{},{board:mode});ls(cfg.key+'_mode',mode);
-    best=+ls(bk())||0;$('mBest').textContent=best?cfg.fmt(best):'0';hubTop=null;$('mHub').textContent='–';$('mHubWho').textContent='record du hub';$('mLb').replaceChildren();
+    best=+ls(bk())||0;$('mBest').textContent=best?cfg.fmt(best):cfg.fmt(0);hubTop=null;$('mHub').textContent='–';$('mHubWho').textContent='record du hub';$('mLb').replaceChildren();
     document.querySelectorAll('#modes .btn').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));drawRecs();loadHub()}
   function drawRecs(){const box=$('mrecs');if(!cfg.modes)return;box.classList.remove('hide');box.replaceChildren();
     for(const m of cfg.modes){const c={...base,...(m.set||{})},v=+ls(cfg.key+'_best'+(m.id?'_'+m.id:''))||0,s=document.createElement('span');
@@ -316,7 +316,7 @@ addEventListener('pointerup',e=>{if(e.pointerId!==pid)return;pid=null;const dx=e
 addEventListener('pointercancel',()=>{pid=null});
 // ---------- boucle ----------
 function step(){V.t++;
-  if(CG.state==='play'){CG.tick();if(S.over&&S.dying===(S.finished?70:50)&&!V.sent){V.sent=true;chronoEl.classList.add('hide');if(!S.goal)CG.over(S.score,'bonds');else if(S.finished)CG.over(S.time,'ton chrono');else CG.over(1e5-S.score,'pas arrivé')}}
+  if(CG.state==='play'){CG.tick();if(S.over&&S.dying===(S.finished?70:50)&&!V.sent){V.sent=true;chronoEl.classList.add('hide');if(!S.goal)CG.over(S.score,'bonds');else if(S.finished)CG.over(S.time,'ton chrono');else CG.over(-S.score,'bonds · pas arrivé')}}
   if(S.goal&&!chronoEl.classList.contains('hide'))chronoEl.innerHTML='<span>⏱️ '+fmtT(S.finished?S.time:S.frame/60)+' s · '+Math.min(S.score,GOAL)+' / '+GOAL+'</span>';
   // sonnerie du passage à niveau tant qu'un train approche près du joueur
   if(CG.state==='play'&&!S.over&&V.t%18===0)for(let r=S.P.y-3;r<=S.P.y+5;r++){const row=S.rows[r];if(row&&row.t==='t'&&row.warn&&!row.train){CG.sfx.tone(1250,0,.09,{type:'triangle',v:.25});break}}
@@ -406,11 +406,13 @@ function draw(){
 }
 let last=performance.now(),acc=0;function frame(now){acc+=Math.min(100,now-last);last=now;while(acc>=1000/60){step();acc-=1000/60}draw();requestAnimationFrame(frame)}
 document.addEventListener('visibilitychange',()=>{last=performance.now();acc=0});
+// anciens records perso du contre la montre comptés en bonds (avant cette version) : on les oublie
+try{const k='crossychad_best_chrono',v=+localStorage.getItem(k);if(v>=1e4||v<0)localStorage.removeItem(k)}catch{}
 CG.init({key:'crossychad',unit:'bonds',sim:true,medals:[[25,'🥉','Piéton prudent'],[60,'🥈','Roi du passage piéton'],[120,'🥇','Traverseur d\'élite'],[200,'💎','Immortel de l\'autoroute']],lowMsg:'Même pas traversé…',onStart:newGame,
-  modes:[{id:'',label:'♾️ Normal'},{id:'chrono',label:'⏱️ Contre la montre',set:{unit:'',lower:true,noTarget:true,valid:v=>v>0&&v<1e5,scoreFmt:n=>String(n),
-    // valeur classée : temps d'arrivée (s), ou 100000 - distance si pas arrivé (toujours derrière les arrivés)
-    fmt:v=>v<1e4?fmtT(v)+' s':(1e5-v)+' bonds',rowVal:r=>r.time!=null?r.time:r.best!=null?1e5-r.best:null,
-    payload:v=>v<1e4?{score:GOAL,tableau:'chrono',temps:v}:{score:1e5-v,tableau:'chrono'},
+  modes:[{id:'',label:'♾️ Normal'},{id:'chrono',label:'⏱️ Contre la montre',set:{unit:'',lower:true,noTarget:true,valid:v=>v>0,scoreFmt:n=>String(n),
+    // seul le temps d'arrivée compte : une partie non terminée (valeur négative = distance) n'est ni un record ni envoyée au hub
+    fmt:v=>v>0?fmtT(v)+' s':v<0?(-v)+'':'–',rowVal:r=>r.time!=null?r.time:null,
+    payload:v=>v>0?{score:GOAL,tableau:'chrono',temps:v}:{score:0},
     medals:[[9999,'🥉','Arrivé au bout !'],[70,'🥈','Rapide comme l\'éclair'],[55,'🥇','Fusée humaine'],[45,'💎','Intouchable']],lowMsg:'Pas arrivé au bout… même parcours, retente !'}}]});
 requestAnimationFrame(frame);
 
